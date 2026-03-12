@@ -1,31 +1,215 @@
 <!DOCTYPE html>
 <html>
 <head>
-<title>Robby Denim</title>
-<link rel="stylesheet" href="style.css">
+<meta charset="UTF-8">
+<title>TrainPro</title>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+
+<style>
+body{
+  font-family:'Poppins',sans-serif;
+  background:#0b0b0b;
+  color:white;
+  margin:0;
+  padding:0;
+}
+header{
+  background:#111;
+  border-bottom:3px solid #e10600;
+  padding:20px;
+  text-align:center;
+}
+header h1{
+  margin:0;
+  font-size:32px;
+  letter-spacing:2px;
+}
+.container{
+  max-width:1000px;
+  margin:auto;
+  padding:20px;
+}
+.grid{
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(300px,1fr));
+  gap:20px;
+}
+.card{
+  background:#151515;
+  padding:20px;
+  border-radius:10px;
+  border:1px solid #222;
+  box-shadow:0 0 10px rgba(0,0,0,0.5);
+}
+.card h2{
+  margin-top:0;
+  color:#e10600;
+}
+input,textarea{
+  width:100%;
+  padding:10px;
+  margin-top:8px;
+  background:#0f0f0f;
+  border:1px solid #333;
+  border-radius:6px;
+  color:white;
+}
+button{
+  background:#e10600;
+  color:white;
+  border:none;
+  padding:10px 16px;
+  border-radius:6px;
+  font-weight:600;
+  cursor:pointer;
+  margin-top:8px;
+}
+button:hover{
+  background:#ff2a2a;
+}
+.progress{
+  height:12px;
+  background:#222;
+  border-radius:10px;
+  margin-top:10px;
+  overflow:hidden;
+}
+.progress-bar{
+  height:100%;
+  background:#e10600;
+  width:0%;
+  transition:width 0.5s;
+}
+#aiOutput{
+  margin-top:10px;
+  font-style:italic;
+  color:#ccc;
+  min-height:40px;
+  white-space:pre-wrap;
+}
+</style>
 </head>
 <body>
 
 <header>
-<h2>Robby Denim</h2>
-<nav>
-<a href="index.html">Home</a>
-<a href="shop.html">Shop</a>
-<a href="about.html">About</a>
-<a href="contact.html">Contact</a>
-</nav>
+<h1>⚽ TrainPro</h1>
 </header>
 
-<div class="hero">
-<img src="images/banner.jpg" alt="Robby Denim Banner">
-<h1>Custom Baggy Jeans</h1>
-<p>Handmade denim with panels, stripes, and street style designs.</p>
-<a href="shop.html"><button>Shop Now</button></a>
+<div class="container">
+
+<div class="grid">
+
+<div class="card">
+<h2>Log Training / Ask AI</h2>
+<textarea id="freeInput" placeholder="Example: 300 touches, speed workout, shooting drills or ask a question" rows="3"></textarea>
+<button onclick="processInput()">Submit</button>
+<p id="aiOutput">AI feedback will appear here.</p>
 </div>
 
-<footer>
-<p>&copy; 2026 Robby Denim</p>
-</footer>
+<div class="card">
+<h2>Daily Logs</h2>
+<select id="daySelect">
+<option>Monday</option><option>Tuesday</option><option>Wednesday</option><option>Thursday</option><option>Friday</option><option>Saturday</option><option>Sunday</option>
+</select>
+<input id="dayTouches" placeholder="Touches">
+<input id="daySpeed" placeholder="Speed Sessions">
+<input id="dayGym" placeholder="Gym Sessions">
+<button onclick="logDay()">Log Day</button>
+<ul id="dailyLogs"></ul>
+</div>
+
+<div class="card">
+<h2>Weekly Progress</h2>
+<canvas id="progressChart" width="400" height="200"></canvas>
+</div>
+
+<div class="card">
+<h2>Notes</h2>
+<textarea id="notesInput" placeholder="Add a note for today"></textarea>
+<button onclick="saveNote()">Save Note</button>
+<p id="noteList"></p>
+</div>
+
+</div>
+</div>
+
+<script>
+let touches=[], speed=[], gym=[], notes=[], dailyLogs=[];
+if(localStorage.getItem('touches')) touches=JSON.parse(localStorage.getItem('touches'));
+if(localStorage.getItem('speed')) speed=JSON.parse(localStorage.getItem('speed'));
+if(localStorage.getItem('gym')) gym=JSON.parse(localStorage.getItem('gym'));
+if(localStorage.getItem('notes')) notes=JSON.parse(localStorage.getItem('notes'));
+if(localStorage.getItem('dailyLogs')) dailyLogs=JSON.parse(localStorage.getItem('dailyLogs'));
+
+function updateTotals(){
+  document.getElementById('noteList').innerText=notes.join(' | ');
+  document.getElementById('dailyLogs').innerHTML=dailyLogs.map(d=>"<li>"+d.day+": "+d.touches+" touches, "+d.speed+" speed, "+d.gym+" gym</li>").join('');
+  updateChart();
+}
+
+function saveNote(){
+  let t=document.getElementById('notesInput').value;
+  if(t){notes.push(t);localStorage.setItem('notes',JSON.stringify(notes));document.getElementById('notesInput').value='';updateTotals();}
+}
+
+function logDay(){
+  let day=document.getElementById('daySelect').value;
+  let t=parseInt(document.getElementById('dayTouches').value)||0;
+  let s=parseInt(document.getElementById('daySpeed').value)||0;
+  let g=parseInt(document.getElementById('dayGym').value)||0;
+  dailyLogs.push({day:day,touches:t,speed:s,gym:g});
+  localStorage.setItem('dailyLogs',JSON.stringify(dailyLogs));
+  touches.push(t); speed.push(s); gym.push(g);
+  localStorage.setItem('touches',JSON.stringify(touches));
+  localStorage.setItem('speed',JSON.stringify(speed));
+  localStorage.setItem('gym',JSON.stringify(gym));
+  document.getElementById('dayTouches').value='';
+  document.getElementById('daySpeed').value='';
+  document.getElementById('dayGym').value='';
+  updateTotals();
+}
+
+let ctx=document.getElementById('progressChart').getContext('2d');
+let chart=new Chart(ctx,{type:'bar',data:{labels:['Touches','Speed','Gym'],datasets:[{label:'Weekly Totals',data:[0,0,0],backgroundColor:'#e10600'}]},options:{scales:{y:{beginAtZero:true}},plugins:{legend:{display:false}}}});
+function updateChart(){
+  let t=touches.reduce((a,b)=>a+b,0), s=speed.reduce((a,b)=>a+b,0), g=gym.reduce((a,b)=>a+b,0);
+  chart.data.datasets[0].data=[t,s,g]; chart.update();
+}
+
+// ---------- AI (requires OpenAI API) ----------
+const API_KEY = sk-...uUUA          ; 
+async function sendToAI(question){
+  try{
+    const response = await axios.post('https://api.openai.com/v1/chat/completions',{
+      model:"gpt-3.5-turbo",
+      messages:[{role:"system",content:"You are a soccer coach AI that gives advice and answers soccer questions."},{role:"user",content:question}],
+      max_tokens:200
+    },{headers:{'Authorization':`Bearer ${API_KEY}`,'Content-Type':'application/json'}});
+    document.getElementById('aiOutput').innerText=response.data.choices[0].message.content;
+  }catch(e){
+    document.getElementById('aiOutput').innerText="AI error: check API key and internet connection.";
+  }
+}
+
+function processInput(){
+  let input=document.getElementById('freeInput').value;
+  let t=(input.match(/(\d+)\s*touch/)||[0,0])[1]*1;
+  let s=(input.match(/(\d+)\s*speed/)||[0,0])[1]*1;
+  let g=(input.match(/(\d+)\s*gym/)||[0,0])[1]*1;
+  if(t>0){touches.push(t);localStorage.setItem('touches',JSON.stringify(touches));}
+  if(s>0){speed.push(s);localStorage.setItem('speed',JSON.stringify(speed));}
+  if(g>0){gym.push(g);localStorage.setItem('gym',JSON.stringify(gym));}
+  updateTotals();
+  document.getElementById('freeInput').value='';
+  if(input.toLowerCase().includes('how')||input.toLowerCase().includes('best')||input.toLowerCase().includes('drill')||input.toLowerCase().includes('improve')){
+    sendToAI(input);
+  }
+}
+
+updateTotals();
+</script>
 
 </body>
 </html>
