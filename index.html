@@ -5,10 +5,8 @@
 <title>TrainPro</title>
 <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
-
 <style>
-body{
+body {
   font-family:'Poppins',sans-serif;
   background:#0b0b0b;
   color:white;
@@ -39,21 +37,21 @@ header h1{
 .card{
   background:#151515;
   padding:20px;
-  border-radius:10px;
+  border-radius:20px;
   border:1px solid #222;
-  box-shadow:0 0 10px rgba(0,0,0,0.5);
+  box-shadow:0 0 15px rgba(0,0,0,0.5);
 }
 .card h2{
   margin-top:0;
   color:#e10600;
 }
-input,textarea{
+input,textarea,select{
   width:100%;
   padding:10px;
   margin-top:8px;
   background:#0f0f0f;
   border:1px solid #333;
-  border-radius:6px;
+  border-radius:10px;
   color:white;
 }
 button{
@@ -61,7 +59,7 @@ button{
   color:white;
   border:none;
   padding:10px 16px;
-  border-radius:6px;
+  border-radius:10px;
   font-weight:600;
   cursor:pointer;
   margin-top:8px;
@@ -69,25 +67,22 @@ button{
 button:hover{
   background:#ff2a2a;
 }
-.progress{
-  height:12px;
-  background:#222;
-  border-radius:10px;
-  margin-top:10px;
-  overflow:hidden;
-}
-.progress-bar{
-  height:100%;
-  background:#e10600;
-  width:0%;
-  transition:width 0.5s;
-}
 #aiOutput{
   margin-top:10px;
   font-style:italic;
   color:#ccc;
   min-height:40px;
   white-space:pre-wrap;
+}
+.progress-container{
+  display:flex;
+  justify-content:space-around;
+  align-items:center;
+  margin-top:15px;
+}
+canvas{
+  max-width:120px;
+  max-height:120px;
 }
 </style>
 </head>
@@ -98,20 +93,23 @@ button:hover{
 </header>
 
 <div class="container">
-
 <div class="grid">
 
+<!-- AI + Log Input -->
 <div class="card">
 <h2>Log Training / Ask AI</h2>
 <textarea id="freeInput" placeholder="Example: 300 touches, speed workout, shooting drills or ask a question" rows="3"></textarea>
 <button onclick="processInput()">Submit</button>
-<p id="aiOutput">AI feedback will appear here.</p>
+<p id="aiOutput">AI feedback will appear here (backend required for live responses).</p>
 </div>
 
+<!-- Daily Logs -->
 <div class="card">
 <h2>Daily Logs</h2>
 <select id="daySelect">
-<option>Monday</option><option>Tuesday</option><option>Wednesday</option><option>Thursday</option><option>Friday</option><option>Saturday</option><option>Sunday</option>
+<option>Monday</option><option>Tuesday</option><option>Wednesday</option>
+<option>Thursday</option><option>Friday</option><option>Saturday</option>
+<option>Sunday</option>
 </select>
 <input id="dayTouches" placeholder="Touches">
 <input id="daySpeed" placeholder="Speed Sessions">
@@ -120,11 +118,17 @@ button:hover{
 <ul id="dailyLogs"></ul>
 </div>
 
+<!-- Circular Progress -->
 <div class="card">
 <h2>Weekly Progress</h2>
-<canvas id="progressChart" width="400" height="200"></canvas>
+<div class="progress-container">
+  <canvas id="touchesChart"></canvas>
+  <canvas id="speedChart"></canvas>
+  <canvas id="gymChart"></canvas>
+</div>
 </div>
 
+<!-- Notes -->
 <div class="card">
 <h2>Notes</h2>
 <textarea id="notesInput" placeholder="Add a note for today"></textarea>
@@ -136,6 +140,7 @@ button:hover{
 </div>
 
 <script>
+// ---------- Data Storage ----------
 let touches=[], speed=[], gym=[], notes=[], dailyLogs=[];
 if(localStorage.getItem('touches')) touches=JSON.parse(localStorage.getItem('touches'));
 if(localStorage.getItem('speed')) speed=JSON.parse(localStorage.getItem('speed'));
@@ -143,10 +148,11 @@ if(localStorage.getItem('gym')) gym=JSON.parse(localStorage.getItem('gym'));
 if(localStorage.getItem('notes')) notes=JSON.parse(localStorage.getItem('notes'));
 if(localStorage.getItem('dailyLogs')) dailyLogs=JSON.parse(localStorage.getItem('dailyLogs'));
 
+// ---------- Update Functions ----------
 function updateTotals(){
   document.getElementById('noteList').innerText=notes.join(' | ');
   document.getElementById('dailyLogs').innerHTML=dailyLogs.map(d=>"<li>"+d.day+": "+d.touches+" touches, "+d.speed+" speed, "+d.gym+" gym</li>").join('');
-  updateChart();
+  updateCharts();
 }
 
 function saveNote(){
@@ -164,35 +170,35 @@ function logDay(){
   touches.push(t); speed.push(s); gym.push(g);
   localStorage.setItem('touches',JSON.stringify(touches));
   localStorage.setItem('speed',JSON.stringify(speed));
-  localStorage.setItem('gym',JSON.stringify(gym));
+  localStorage.setItem('gym',JSON.stringify(g));
   document.getElementById('dayTouches').value='';
   document.getElementById('daySpeed').value='';
   document.getElementById('dayGym').value='';
   updateTotals();
 }
 
-let ctx=document.getElementById('progressChart').getContext('2d');
-let chart=new Chart(ctx,{type:'bar',data:{labels:['Touches','Speed','Gym'],datasets:[{label:'Weekly Totals',data:[0,0,0],backgroundColor:'#e10600'}]},options:{scales:{y:{beginAtZero:true}},plugins:{legend:{display:false}}}});
-function updateChart(){
-  let t=touches.reduce((a,b)=>a+b,0), s=speed.reduce((a,b)=>a+b,0), g=gym.reduce((a,b)=>a+b,0);
-  chart.data.datasets[0].data=[t,s,g]; chart.update();
+// ---------- Circular Progress Charts ----------
+const touchesCtx=document.getElementById('touchesChart').getContext('2d');
+const speedCtx=document.getElementById('speedChart').getContext('2d');
+const gymCtx=document.getElementById('gymChart').getContext('2d');
+
+let touchesChart=new Chart(touchesCtx,{type:'doughnut',data:{labels:['Touches','Remaining'],datasets:[{data:[0,100],backgroundColor:['#e10600','#222']}]},options:{cutout:'70%',plugins:{legend:{display:false}}}});
+let speedChart=new Chart(speedCtx,{type:'doughnut',data:{labels:['Speed','Remaining'],datasets:[{data:[0,100],backgroundColor:['#e10600','#222']}]},options:{cutout:'70%',plugins:{legend:{display:false}}}});
+let gymChart=new Chart(gymCtx,{type:'doughnut',data:{labels:['Gym','Remaining'],datasets:[{data:[0,100],backgroundColor:['#e10600','#222']}]},options:{cutout:'70%',plugins:{legend:{display:false}}}});
+
+function updateCharts(){
+  let t=touches.reduce((a,b)=>a+b,0);
+  let s=speed.reduce((a,b)=>a+b,0);
+  let g=gym.reduce((a,b)=>a+b,0);
+  touchesChart.data.datasets[0].data=[t,Math.max(100-t,0)];
+  speedChart.data.datasets[0].data=[s,Math.max(100-s,0)];
+  gymChart.data.datasets[0].data=[g,Math.max(100-g,0)];
+  touchesChart.update();
+  speedChart.update();
+  gymChart.update();
 }
 
-// ---------- AI (requires OpenAI API) ----------
-const API_KEY = sk-...uUUA          ; 
-async function sendToAI(question){
-  try{
-    const response = await axios.post('https://api.openai.com/v1/chat/completions',{
-      model:"gpt-3.5-turbo",
-      messages:[{role:"system",content:"You are a soccer coach AI that gives advice and answers soccer questions."},{role:"user",content:question}],
-      max_tokens:200
-    },{headers:{'Authorization':`Bearer ${API_KEY}`,'Content-Type':'application/json'}});
-    document.getElementById('aiOutput').innerText=response.data.choices[0].message.content;
-  }catch(e){
-    document.getElementById('aiOutput').innerText="AI error: check API key and internet connection.";
-  }
-}
-
+// ---------- AI (visual only, backend needed) ----------
 function processInput(){
   let input=document.getElementById('freeInput').value;
   let t=(input.match(/(\d+)\s*touch/)||[0,0])[1]*1;
@@ -203,9 +209,7 @@ function processInput(){
   if(g>0){gym.push(g);localStorage.setItem('gym',JSON.stringify(gym));}
   updateTotals();
   document.getElementById('freeInput').value='';
-  if(input.toLowerCase().includes('how')||input.toLowerCase().includes('best')||input.toLowerCase().includes('drill')||input.toLowerCase().includes('improve')){
-    sendToAI(input);
-  }
+  document.getElementById('aiOutput').innerText="AI not connected. Backend required for live responses.";
 }
 
 updateTotals();
